@@ -1,11 +1,12 @@
 import functools
 import math
 import os
-from pathlib import Path
 import sys
 import time
+from pathlib import Path
 
 import bpy
+import mathutils
 
 script_dir = os.path.dirname(bpy.data.filepath)
 if script_dir not in sys.path:
@@ -15,7 +16,18 @@ class GCodeParser:
 
     def __init__(self) -> None:
 
-        gcode_file = 'cube.gcode'
+        gcode_file = 'nano.gcode'
+        
+        self.bed_size = 350
+        self.offset_location = mathutils.Vector((self.bed_size/2,self.bed_size/2,0))
+        
+        self.light_location = self.offset_location + mathutils.Vector((0,0,3.8))
+        self.camera_init_location = (-58.39, 1.85, 38.8) # self.offset_location + mathutils.Vector((186, -234.22, 38))
+        self.camera_init_rotation = (math.radians(63.13), math.radians(-0.2), math.radians(-54.3))
+        self.camera_lens = 29.7
+        self.sensor_width = 45
+        self.head_pos = self.offset_location.copy()
+
 
         self.remove_all()
 
@@ -25,7 +37,7 @@ class GCodeParser:
             self.ellipse_bevel = bpy.data.objects['Elliptical_Bevel']
 
         if not 'Bed' in bpy.data.objects:
-            self.bed = self.create_bed("Bed", size=60)
+            self.bed = self.create_bed("Bed", size=self.bed_size)
         else:
             self.bed = bpy.data.objects['Bed']
 
@@ -47,10 +59,10 @@ class GCodeParser:
             # Link the camera object to the current scene
             bpy.context.collection.objects.link(camera_object)
 
-            camera_data.lens = 60
-            camera_data.sensor_width = 56
+            camera_data.lens = self.camera_lens
+            camera_data.sensor_width = self.sensor_width
             # Set camera location and rotation
-            camera_object.rotation_euler = (math.radians(50), 0, math.radians(45))
+            camera_object.rotation_euler = self.camera_init_rotation
 
             # Set the camera as the active camera for the scene
             bpy.context.scene.camera = camera_object
@@ -75,29 +87,26 @@ class GCodeParser:
         self.dir_path = dir_path
 
         self.current_layer = []
-        self.curves = []
+        self.collections = []
         self.layer_number = 0
         self.last_z = None
-        self.last_e = 0  # Track the last extruder position
-        self.last_g0 = False
-        self.last_x = None
-        self.last_y = None
-        self.is_extruding = False  # State to track if the extruder is laying down material
+        self.last_z_extruded = None
 
         self.reset()
 
     def reset(self):
-        self.camera.location = (16, -16.5, 17.5)
-        self.light.location = (0, 0, 3.8)
+        self.camera.location = self.camera_init_location
+        self.light.location = self.light_location
 
     def create_light(self):
-        light_data = bpy.data.lights.new("Light",'AREA')
+        light_data = bpy.data.lights.new("Light",'SUN')
         light_object = bpy.data.objects.new("Light", light_data)
 
-        light_object.data.size = 20
-        light_object.data.energy = 1000
+        # light_object.data.size = 20
+        light_object.data.energy = 1.5
         bpy.context.collection.objects.link(light_object)
-        light_object.location = (0, 0, 3.8)
+        light_object.location = self.light_location
+        light_object.rotation_euler = (0, math.radians(45), 0)
 
         return light_object
         
@@ -143,6 +152,7 @@ class GCodeParser:
         bed_obj = bpy.data.objects.new(name, curve_data)
         bpy.context.collection.objects.link(bed_obj)
 
+        bed_obj.location = self.offset_location
         # Switch to edit mode
         bpy.context.view_layer.objects.active = bed_obj
         bpy.ops.object.mode_set(mode='EDIT')
@@ -268,25 +278,34 @@ class GCodeParser:
 
     def move_platform_up(self,z_height):
         self.light.location = (self.light.location.x, self.light.location.y, z_height + 1)
-        self.camera.location = (self.camera.location.x, self.camera.location.y, z_height + 16.5)
+        self.camera.location = (self.camera.location.x, self.camera.location.y, z_height + self.camera_init_location[2])
 
-    # Parse the GCode file and create curves
+    def close_curve(self):
+
+        if len(self.collections) == 0:
+            new_collection = bpy.data.collections.new(f'Collection_{self.layer_number}')
+            bpy.context.scene.collection.children.link(new_collection)
+            self.collections.append(new_collection)
+
+        last_collection = self.collections[-1]
+        layer_name = f"Layer_{len(self.collections)}"
+        curve_obj = self.create_new_curve(layer_name, self.current_layer, self.ellipse_bevel,last_collection)
+    
+        
     def parse_gcode(self,line_num):
 
         lines = self.lines[line_num:]
         last_line = 0
 
-        new_collection = bpy.data.collections.new(f'Collection_{self.layer_number}')
-        bpy.context.scene.collection.children.link(new_collection)
-
         for idx,line in enumerate(lines):
             is_g0 = line.startswith('G0')
             is_g1 = line.startswith('G1')
+            is_g92 = line.startswith('G92')
             
+            x = y = z = e = None
 
-            if is_g1 or is_g0:
+            if is_g92 or is_g0 or is_g1:
                 params = line.split()
-                x = y = z = e = None
                 for param in params:
                     if param.startswith('X'):
                         x = float(param[1:])
@@ -294,51 +313,65 @@ class GCodeParser:
                         y = float(param[1:])
                     if param.startswith('Z'):
                         z = float(param[1:])
-                               
-                if is_g0 and x is not None and y is not None:
-                    self.last_g0 = True
-                    self.last_x = x
-                    self.last_y = y
+                    if param.startswith('E'):
+                        e = float(param[1:])
+            
+            if is_g92 and e == 0:
+                if len(self.current_layer) > 1:
+                    self.close_curve()
 
-                    if len(self.current_layer) > 1:
-                        # Create a curve from the current layer points if we were extruding
-                        layer_name = f"Layer_{len(self.curves)}"
-                        curve_obj = self.create_new_curve(layer_name, self.current_layer, self.ellipse_bevel,new_collection)
-                        # convert_curve_to_mesh(curve_obj, bevel_obj)  # Convert the curve to mesh
-                        self.curves.append(self.current_layer)
-
-                    self.current_layer = []
-
-                if z is not None and z != self.last_z:
-                    self.last_z = z
-                    self.layer_number += 1
-                    last_line = idx+line_num
-
-                    self.render_image()
-                    self.move_platform_up(z)
-                    break
+                self.current_layer = []          
                 
-                # Add point to the current layer if extruding
+            if is_g1 or is_g0:       
+                new_head_pos = self.head_pos.copy()
 
-                if self.last_z is not None:
-                    if self.last_g0 and is_g1:
-                        self.current_layer.append((self.last_x, self.last_y, self.last_z))
-                        self.last_g0 = False
-                        self.last_x = None
-                        self.last_y = None
+                if x is not None:
+                    new_head_pos.x = x
 
-                    if x is not None and y is not None and is_g1:
-                        self.current_layer.append((x, y, self.last_z))
+                if y is not None:
+                    new_head_pos.y = y
 
-                                # If Z changes, create a new curve for a new layer
+                if z is not None:
+                    new_head_pos.z = z
+
+                if e is not None: #Extrusion Happen
+                    if self.last_z != new_head_pos.z:
+                        new_collection = bpy.data.collections.new(f'Collection_{self.layer_number}')
+                        bpy.context.scene.collection.children.link(new_collection)
+                        if len(self.collections) > 0:
+                            self.collections[-1].hide_viewport = True
+
+                        self.collections.append(new_collection)
+
+                        self.last_z = new_head_pos.z
+                        self.layer_number += 1
+                        last_line = idx+line_num
+
+                        self.render_image()
+                        self.move_platform_up(new_head_pos.z)
+                        break
+
+                    new_pos_tup = (new_head_pos.x, new_head_pos.y, new_head_pos.z)
+                    head_pos_tup = (self.head_pos.x, self.head_pos.y, self.head_pos.z)
+                        
+                    if len(self.current_layer) == 0:
+                        self.current_layer.append(head_pos_tup)
+                        self.current_layer.append(new_pos_tup)
+                    else:
+                        self.current_layer.append(new_pos_tup)
+
+                self.head_pos = new_head_pos
+                        
+                if e is None:
+                    if len(self.current_layer) > 1:
+                        self.close_curve()
+
+                    self.current_layer = []                   
 
 
-        # Add the last layer's curve if there are any points left
         if self.current_layer:
-            layer_name = f"Layer_{len(self.curves)}"
-            curve_obj = self.create_new_curve(layer_name, self.current_layer, self.ellipse_bevel,new_collection)
-            # convert_curve_to_mesh(curve_obj, bevel_obj)  # Convert the last curve to mesh
-            self.curves.append(self.current_layer)
+            self.close_curve()
+
 
         return last_line
 
@@ -358,6 +391,9 @@ def render_with_delay():
     current_line = newLine
     
     if newLine == 0:
+
+        for col in gcode.collections:
+            col.hide_viewport = False
         return None
     
     return 0.1
