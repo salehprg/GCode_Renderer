@@ -16,7 +16,7 @@ class GCodeParser:
 
     def __init__(self) -> None:
 
-        gcode_file = 'nano.gcode'
+        gcode_file = 'print.gcode'
         
         self.bed_size = 350
         self.offset_location = mathutils.Vector((self.bed_size/2,self.bed_size/2,0))
@@ -28,6 +28,10 @@ class GCodeParser:
         self.sensor_width = 45
         self.head_pos = self.offset_location.copy()
 
+        material_name = "FDM"
+
+        # Get the material by name
+        self.material = bpy.data.materials.get(material_name)
 
         self.remove_all()
 
@@ -256,6 +260,13 @@ class GCodeParser:
         # Switch back to object mode
         bpy.ops.object.mode_set(mode='OBJECT')
         
+        if curve_obj.data.materials:
+            # Replace the first material slot with the 'FDM' material
+            curve_obj.data.materials[0] = self.material
+        else:
+            # Assign the 'FDM' material to the object if no material exists
+            curve_obj.data.materials.append(self.material)
+        
         return curve_obj
 
     def render_image(self):
@@ -338,8 +349,8 @@ class GCodeParser:
                     if self.last_z != new_head_pos.z:
                         new_collection = bpy.data.collections.new(f'Collection_{self.layer_number}')
                         bpy.context.scene.collection.children.link(new_collection)
-                        if len(self.collections) > 0:
-                            self.collections[-1].hide_viewport = True
+                        # if len(self.collections) > 0:
+                        #     self.collections[-1].hide_viewport = True
 
                         self.collections.append(new_collection)
 
