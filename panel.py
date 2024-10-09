@@ -21,7 +21,9 @@ class GCodeParser:
         self.bed_size = 350
         self.offset_location = mathutils.Vector((self.bed_size/2,self.bed_size/2,0))
         
-        self.light_location = self.offset_location + mathutils.Vector((0,0,3.8))
+        self.light_init_location = (self.bed_size/2, -17.5, 38.8) # self.offset_location + mathutils.Vector((186, -234.22, 38))
+        self.light_location =  self.light_init_location
+
         self.camera_init_location = (-58.39, 1.85, 38.8) # self.offset_location + mathutils.Vector((186, -234.22, 38))
         self.camera_init_rotation = (math.radians(63.13), math.radians(-0.2), math.radians(-54.3))
         self.camera_lens = 29.7
@@ -103,14 +105,16 @@ class GCodeParser:
         self.light.location = self.light_location
 
     def create_light(self):
-        light_data = bpy.data.lights.new("Light",'SUN')
+        light_data = bpy.data.lights.new("Light",'AREA')
         light_object = bpy.data.objects.new("Light", light_data)
 
         # light_object.data.size = 20
-        light_object.data.energy = 1.5
+        light_object.data.energy = 500 * 1000
+        light_object.data.size = 50
         bpy.context.collection.objects.link(light_object)
         light_object.location = self.light_location
-        light_object.rotation_euler = (0, math.radians(45), 0)
+        light_object.scale = (0.477,5.264,1)
+        light_object.rotation_euler = (0, math.radians(75), math.radians(-90))
 
         return light_object
         
@@ -270,6 +274,7 @@ class GCodeParser:
         return curve_obj
 
     def render_image(self):
+        print("Rendering...")
         # Set the scene
         scene = bpy.context.scene
 
@@ -288,7 +293,7 @@ class GCodeParser:
         bpy.ops.render.render(write_still=True)
 
     def move_platform_up(self,z_height):
-        self.light.location = (self.light.location.x, self.light.location.y, z_height + 1)
+        self.light.location = (self.light.location.x, self.light.location.y, z_height + self.light_init_location[2])
         self.camera.location = (self.camera.location.x, self.camera.location.y, z_height + self.camera_init_location[2])
 
     def close_curve(self):
@@ -312,6 +317,7 @@ class GCodeParser:
             is_g0 = line.startswith('G0')
             is_g1 = line.startswith('G1')
             is_g92 = line.startswith('G92')
+            is_M118 = line.startswith('M118')
             
             x = y = z = e = None
 
@@ -326,7 +332,10 @@ class GCodeParser:
                         z = float(param[1:])
                     if param.startswith('E'):
                         e = float(param[1:])
-            
+            if is_M118:
+                print(idx)
+                self.render_image()
+                
             if is_g92 and e == 0:
                 if len(self.current_layer) > 1:
                     self.close_curve()
@@ -349,8 +358,8 @@ class GCodeParser:
                     if self.last_z != new_head_pos.z:
                         new_collection = bpy.data.collections.new(f'Collection_{self.layer_number}')
                         bpy.context.scene.collection.children.link(new_collection)
-                        # if len(self.collections) > 0:
-                        #     self.collections[-1].hide_viewport = True
+                        if len(self.collections) > 0:
+                            self.collections[-1].hide_viewport = True
 
                         self.collections.append(new_collection)
 
@@ -358,7 +367,9 @@ class GCodeParser:
                         self.layer_number += 1
                         last_line = idx+line_num
 
-                        self.render_image()
+                        self.head_pos = new_head_pos
+                        
+                        # self.render_image()
                         self.move_platform_up(new_head_pos.z)
                         break
 
