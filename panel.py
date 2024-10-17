@@ -8,6 +8,35 @@ from pathlib import Path
 import bpy
 import mathutils
 
+bl_info = {
+    "name": "GCode Parser",
+    "description": "",
+    "author": "Saleh",
+    "version": (0, 0, 1),
+    "blender": (4, 2, 1),
+    "location": "GCode > GCode PA",
+    "warning": "", # used for warning icon and text in addons panel
+    "wiki_url": "",
+    "tracker_url": "",
+    "category": "Test"
+}
+
+import bpy
+
+from bpy.props import (StringProperty,
+                       BoolProperty,
+                       IntProperty,
+                       FloatProperty,
+                       FloatVectorProperty,
+                       EnumProperty,
+                       PointerProperty,
+                       )
+from bpy.types import (Panel,
+                       Operator,
+                       AddonPreferences,
+                       PropertyGroup,
+                       )
+
 script_dir = os.path.dirname(bpy.data.filepath)
 if script_dir not in sys.path:
     sys.path.append(script_dir)
@@ -29,6 +58,8 @@ class GCodeParser:
         self.camera_lens = 29.7
         self.sensor_width = 45
         self.head_pos = self.offset_location.copy()
+
+        self.head = bpy.data.objects["Head"]
 
         material_name = "FDM"
 
@@ -86,17 +117,12 @@ class GCodeParser:
         cwd = Path.cwd()
 
         dir_path = f'{cwd}/images_{timestr}'
-
-        if not os.path.exists(dir_path):
-            os.makedirs(dir_path)
-
         self.dir_path = dir_path
 
         self.current_layer = []
         self.collections = []
         self.layer_number = 0
         self.last_z = None
-        self.last_z_extruded = None
 
         self.reset()
 
@@ -275,6 +301,10 @@ class GCodeParser:
 
     def render_image(self):
         print("Rendering...")
+
+        if not os.path.exists(self.dir_path):
+            os.makedirs(self.dir_path)
+        
         # Set the scene
         scene = bpy.context.scene
 
@@ -285,10 +315,14 @@ class GCodeParser:
 
         # Set the render file format
         scene.render.image_settings.file_format = 'PNG'
+        file_path = f'{self.dir_path}/layer_{self.layer_number}.png'
 
-        scene.render.filepath = f'{self.dir_path}/layer_{self.layer_number}.png'
+        counter = 1
+        while os.path.exists(file_path):
+            file_path = f'{self.dir_path}/layer_{self.layer_number}_{counter}.png'
+            counter += 1
 
-
+        scene.render.filepath = file_path
         # Render the scene
         bpy.ops.render.render(write_still=True)
 
@@ -307,8 +341,11 @@ class GCodeParser:
         layer_name = f"Layer_{len(self.collections)}"
         curve_obj = self.create_new_curve(layer_name, self.current_layer, self.ellipse_bevel,last_collection)
     
-        
-    def parse_gcode(self,line_num):
+    def set_head_pos(self, new_head_pos):
+        self.head_pos = new_head_pos
+        self.head.location = self.head_pos
+
+    def parse_gcode(self,line_num,render = True,hide_new_collection=True):
 
         lines = self.lines[line_num:]
         last_line = 0
@@ -318,6 +355,7 @@ class GCodeParser:
             is_g1 = line.startswith('G1')
             is_g92 = line.startswith('G92')
             is_M118 = line.startswith('M118')
+            is_G4P50 = line.startswith('G4 P50')
             
             x = y = z = e = None
 
@@ -332,8 +370,8 @@ class GCodeParser:
                         z = float(param[1:])
                     if param.startswith('E'):
                         e = float(param[1:])
-            if is_M118:
-                print(idx)
+            if is_G4P50 and render:
+                print(f"G4 P50 on Line {idx+line_num}")
                 self.render_image()
                 
             if is_g92 and e == 0:
@@ -358,7 +396,7 @@ class GCodeParser:
                     if self.last_z != new_head_pos.z:
                         new_collection = bpy.data.collections.new(f'Collection_{self.layer_number}')
                         bpy.context.scene.collection.children.link(new_collection)
-                        if len(self.collections) > 0:
+                        if len(self.collections) > 0 and hide_new_collection:
                             self.collections[-1].hide_viewport = True
 
                         self.collections.append(new_collection)
@@ -367,7 +405,7 @@ class GCodeParser:
                         self.layer_number += 1
                         last_line = idx+line_num
 
-                        self.head_pos = new_head_pos
+                        self.set_head_pos(new_head_pos)
                         
                         # self.render_image()
                         self.move_platform_up(new_head_pos.z)
@@ -382,7 +420,7 @@ class GCodeParser:
                     else:
                         self.current_layer.append(new_pos_tup)
 
-                self.head_pos = new_head_pos
+                self.set_head_pos(new_head_pos)
                         
                 if e is None:
                     if len(self.current_layer) > 1:
@@ -400,15 +438,28 @@ class GCodeParser:
 gcode = GCodeParser()
 current_line = 0
 
-def render_with_delay():       
+def render_with_delay(render, hide_collection):       
     global gcode
     global current_line
-
-    
     line = gcode.lines[current_line]
-
     current_line += 1
-    newLine = gcode.parse_gcode(current_line)
+    newLine = gcode.parse_gcode(current_line,render=render,hide_new_collection=hide_collection)
+    print(f"{current_line} - {newLine}")
+    current_line = newLine
+    
+    if newLine == 0:
+        for col in gcode.collections:
+            col.hide_viewport = False
+        return None
+    
+    return 0.1
+
+def render_without_render():       
+    global gcode
+    global current_line
+    line = gcode.lines[current_line]
+    current_line += 1
+    newLine = gcode.parse_gcode(current_line,False)
     print(f"{current_line} - {newLine}")
     current_line = newLine
     
@@ -426,33 +477,45 @@ class ReadGCodeOperator_Full(bpy.types.Operator):
     bl_idname = "wm.read_gcode"
     bl_label = "Read GCode"
 
+    
     def execute(self, context):
         try:
             # Check if we are still within the bounds of the file
+            scene = context.scene
+            my_settings = scene.my_settings
+
+            if (my_settings.enable_render == True):
+                print ("Property Enabled")
+            else:
+                print ("Property Disabled")
+            
             gcode.__init__()
-            bpy.app.timers.register(functools.partial(render_with_delay))
+
+            bpy.app.timers.register(functools.partial(render_with_delay, my_settings.enable_render, my_settings.hide_collection))
             
             self.report({'INFO'}, "End of GCode file reached.")
             return {'FINISHED'}
         except Exception as e:
             self.report({'ERROR'}, f"Failed to read file: {str(e)}")
             return {'CANCELLED'}
+    
 
 class ReadGCodeOperator_Line(bpy.types.Operator):
     """Read GCode File"""
     bl_idname = "wm.read_gcode_line"
     bl_label = "Read GCode"
 
-
-    current_line : bpy.props.IntProperty(default=0)
     
     def execute(self, context):
         try:
-    
-            self.current_line += 1
-            newLine = gcode.parse_gcode(self.current_line)
-            print(f"{self.current_line} - {newLine}")
-            self.current_line = newLine
+            
+            scene = context.scene
+            my_settings = scene.my_settings
+
+            my_settings.current_line += 1
+            newLine = gcode.parse_gcode(my_settings.current_line,render=my_settings.enable_render, hide_new_collection= my_settings.hide_collection)
+            print(f"{my_settings.current_line} - {newLine}")
+            my_settings.current_line = newLine
             
             self.report({'INFO'}, "End of GCode file reached.")
             return {'FINISHED'}
@@ -485,22 +548,57 @@ class GCodeReaderPanel(bpy.types.Panel):
     
     def draw(self, context):
         layout = self.layout
-        layout.operator("wm.read_gcode", text="Select and Read GCode")
-        layout.operator("wm.read_gcode_line", text="Select and Read GCode Line By Line")
+
+        scene = context.scene
+        my_settings = scene.my_settings
+
+        row = layout.row()
+        row.prop(my_settings, "enable_render", text="Render?")
+        row.prop(my_settings, "hide_collection", text="Hide Collection")
+        # row.prop(my_settings, "current_line", text="Line Number")
+        row = layout.row()
+        row.operator("wm.read_gcode", text="GCode Full")
+        row.operator("wm.read_gcode_line", text="GCode Line By Line")
         layout.operator("wm.gcode_reset", text="Reset")
 
+class MySettings(PropertyGroup):
+
+    enable_render : BoolProperty(
+        name="Enable or Disable",
+        description="Render when parsing GCode",
+        default = False
+        )
+    
+    hide_collection : BoolProperty(
+        name="Enable or Disable",
+        description="Hide Newly Collection",
+        default = False
+        )
+
+    current_line : IntProperty(
+        name = "Set a value",
+        description="Render when parsing GCode",
+        )
+    
+classes = (
+    MySettings,
+    ReadGCodeOperator_Full,
+    ReadGCodeOperator_Line,
+    GCodeReset,
+    GCodeReaderPanel
+)
 
 # Register and Unregister Classes
 def register():
-    bpy.utils.register_class(ReadGCodeOperator_Full)
-    bpy.utils.register_class(ReadGCodeOperator_Line)
-    bpy.utils.register_class(GCodeReset)
-    bpy.utils.register_class(GCodeReaderPanel)
+    from bpy.utils import register_class
+    for cls in classes:
+        register_class(cls)
+
+    bpy.types.Scene.my_settings = PointerProperty(type=MySettings)
 
 def unregister():
-    bpy.utils.unregister_class(ReadGCodeOperator_Full)
-    bpy.utils.unregister_class(ReadGCodeOperator_Line)
-    bpy.utils.unregister_class(GCodeReset)
-    bpy.utils.unregister_class(GCodeReaderPanel)
+    from bpy.utils import unregister_class
+    for cls in reversed(classes):
+        unregister_class(cls)
 
 register()
