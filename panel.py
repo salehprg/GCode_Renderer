@@ -45,7 +45,7 @@ class GCodeParser:
 
     def __init__(self) -> None:
 
-        gcode_file = 'print.gcode'
+        gcode_file = 'pyramid.gcode'
         
         self.bed_size = 350
         self.offset_location = mathutils.Vector((self.bed_size/2,self.bed_size/2,0))
@@ -122,7 +122,6 @@ class GCodeParser:
         self.current_layer = []
         self.collections = []
         self.layer_number = 0
-        self.last_z = None
 
         self.reset()
 
@@ -331,7 +330,6 @@ class GCodeParser:
         self.camera.location = (self.camera.location.x, self.camera.location.y, z_height + self.camera_init_location[2])
 
     def close_curve(self):
-
         if len(self.collections) == 0:
             new_collection = bpy.data.collections.new(f'Collection_{self.layer_number}')
             bpy.context.scene.collection.children.link(new_collection)
@@ -344,6 +342,9 @@ class GCodeParser:
     def set_head_pos(self, new_head_pos):
         self.head_pos = new_head_pos
         self.head.location = self.head_pos
+
+        self.move_platform_up(new_head_pos.z)
+
 
     def parse_gcode(self,line_num,render = True,hide_new_collection=True):
 
@@ -370,6 +371,10 @@ class GCodeParser:
                         z = float(param[1:])
                     if param.startswith('E'):
                         e = float(param[1:])
+
+                    if param == ';':
+                        break
+                    
             if is_G4P50 and render:
                 print(f"G4 P50 on Line {idx+line_num}")
                 self.render_image()
@@ -378,10 +383,29 @@ class GCodeParser:
                 if len(self.current_layer) > 1:
                     self.close_curve()
 
-                self.current_layer = []          
+                self.current_layer = []        
+
+            new_head_pos = self.head_pos.copy()
+
+            if is_M118:
+                new_collection = bpy.data.collections.new(f'Collection_{self.layer_number}')
+                bpy.context.scene.collection.children.link(new_collection)
+                if len(self.collections) > 0 and hide_new_collection:
+                    self.collections[-1].hide_viewport = True
+
+                self.collections.append(new_collection)
+
+                self.layer_number += 1
+                last_line = idx+line_num
+
+                if len(self.current_layer) > 1:
+                    self.close_curve()
+
+                self.current_layer = []  
+                self.set_head_pos(new_head_pos)
+                break
                 
             if is_g1 or is_g0:       
-                new_head_pos = self.head_pos.copy()
 
                 if x is not None:
                     new_head_pos.x = x
@@ -393,24 +417,6 @@ class GCodeParser:
                     new_head_pos.z = z
 
                 if e is not None: #Extrusion Happen
-                    if self.last_z != new_head_pos.z:
-                        new_collection = bpy.data.collections.new(f'Collection_{self.layer_number}')
-                        bpy.context.scene.collection.children.link(new_collection)
-                        if len(self.collections) > 0 and hide_new_collection:
-                            self.collections[-1].hide_viewport = True
-
-                        self.collections.append(new_collection)
-
-                        self.last_z = new_head_pos.z
-                        self.layer_number += 1
-                        last_line = idx+line_num
-
-                        self.set_head_pos(new_head_pos)
-                        
-                        # self.render_image()
-                        self.move_platform_up(new_head_pos.z)
-                        break
-
                     new_pos_tup = (new_head_pos.x, new_head_pos.y, new_head_pos.z)
                     head_pos_tup = (self.head_pos.x, self.head_pos.y, self.head_pos.z)
                         
@@ -421,12 +427,6 @@ class GCodeParser:
                         self.current_layer.append(new_pos_tup)
 
                 self.set_head_pos(new_head_pos)
-                        
-                if e is None:
-                    if len(self.current_layer) > 1:
-                        self.close_curve()
-
-                    self.current_layer = []                   
 
 
         if self.current_layer:
@@ -555,7 +555,8 @@ class GCodeReaderPanel(bpy.types.Panel):
         row = layout.row()
         row.prop(my_settings, "enable_render", text="Render?")
         row.prop(my_settings, "hide_collection", text="Hide Collection")
-        # row.prop(my_settings, "current_line", text="Line Number")
+        row = layout.row()
+        row.prop(my_settings, "current_line", text="Line Number")
         row = layout.row()
         row.operator("wm.read_gcode", text="GCode Full")
         row.operator("wm.read_gcode_line", text="GCode Line By Line")
@@ -578,6 +579,7 @@ class MySettings(PropertyGroup):
     current_line : IntProperty(
         name = "Set a value",
         description="Render when parsing GCode",
+        default=0
         )
     
 classes = (
