@@ -61,23 +61,24 @@ class GCodeParser:
 
         self.head = bpy.data.objects["Head"]
 
-        material_name = "FDM"
+        material_name = "FilamentMat"
+        mask_mat_name = "MaskMat"
 
         # Get the material by name
-        self.material = bpy.data.materials.get(material_name)
+        self.fdm_material = bpy.data.materials.get(material_name)
+        self.mask_material = bpy.data.materials.get(mask_mat_name)
 
         self.remove_all()
 
         if not 'Elliptical_Bevel' in bpy.data.objects:
-            self.ellipse_bevel = self.create_ellipse_bevel("Elliptical_Bevel", major_radius=0.2, minor_radius=0.1)
+            self.ellipse_bevel = self.create_ellipse_bevel("Elliptical_Bevel", major_radius=0.22, minor_radius=0.12)
         else:
             self.ellipse_bevel = bpy.data.objects['Elliptical_Bevel']
 
-        if not 'Bed' in bpy.data.objects:
-            self.bed = self.create_bed("Bed", size=self.bed_size)
-        else:
-            self.bed = bpy.data.objects['Bed']
-
+        # if not 'Bed' in bpy.data.objects:
+        #     self.bed = self.create_bed("Bed", size=self.bed_size)
+        # else:
+        self.bed = bpy.data.objects['Bed']
 
         light_exist = any(light.name == "Light" for light in bpy.data.objects)
 
@@ -144,6 +145,7 @@ class GCodeParser:
         return light_object
         
     def remove_all(self):
+        bpy.ops.object.select_all(action='DESELECT')
         bpy.ops.object.select_pattern(pattern="Layer_*")
         bpy.ops.object.delete()
 
@@ -290,15 +292,63 @@ class GCodeParser:
         bpy.ops.object.mode_set(mode='OBJECT')
         
         if curve_obj.data.materials:
-            # Replace the first material slot with the 'FDM' material
-            curve_obj.data.materials[0] = self.material
+            curve_obj.data.materials[0] = self.fdm_material
         else:
-            # Assign the 'FDM' material to the object if no material exists
-            curve_obj.data.materials.append(self.material)
+            curve_obj.data.materials.append(self.fdm_material)
         
         return curve_obj
 
-    def render_image(self):
+    def _full_render(self,scene,filename):
+        file_path = f'{self.dir_path}/sim_{filename}.png'
+        scene.render.filepath = file_path
+
+        bpy.ops.render.render(write_still=True)
+
+    def _custom_render(self,scene,filename,show_head=True,show_bed=True):
+        file_path = f'{self.dir_path}/bed_{filename}.png'
+        scene.render.filepath = file_path
+
+        if not show_head:
+            self.head.hide_viewport = True
+            self.head.hide_render = True
+        
+        if not show_bed:
+            self.bed.hide_viewport = True
+            self.bed.hide_render = True
+
+        bpy.ops.render.render(write_still=True)
+
+        if not show_head:
+            self.head.hide_viewport = False
+            self.head.hide_render = False
+        
+        if not show_bed:
+            self.bed.hide_viewport = False
+            self.bed.hide_render = False
+        
+    def _mask_render(self,scene,filename):
+        file_path = f'{self.dir_path}/msk_{filename}.png'
+        scene.render.filepath = file_path
+
+        for obj in bpy.data.objects:
+            if obj.type not in {'LIGHT', 'CAMERA'}:
+                obj.hide_viewport = True
+                obj.hide_render = True
+            if obj.name.find("Layer_") != -1:
+                obj.hide_viewport = False
+                obj.hide_render = False
+                obj.data.materials[0] = self.mask_material
+
+        bpy.ops.render.render(write_still=True)
+
+        for obj in bpy.data.objects:
+            obj.hide_viewport = False
+            obj.hide_render = False
+
+            if obj.name.find("Layer_") != -1:
+                obj.data.materials[0] = self.fdm_material
+
+    def render_image(self, filename):
         print("Rendering...")
 
         if not os.path.exists(self.dir_path):
@@ -314,16 +364,17 @@ class GCodeParser:
 
         # Set the render file format
         scene.render.image_settings.file_format = 'PNG'
-        file_path = f'{self.dir_path}/layer_{self.layer_number}.png'
 
-        counter = 1
-        while os.path.exists(file_path):
-            file_path = f'{self.dir_path}/layer_{self.layer_number}_{counter}.png'
-            counter += 1
+        # counter = 1
+        # while os.path.exists(file_path):
+        #     file_path = f'{self.dir_path}/layer_{self.layer_number}_{counter}.png'
+        #     counter += 1
 
-        scene.render.filepath = file_path
         # Render the scene
-        bpy.ops.render.render(write_still=True)
+        self._full_render(scene,filename)
+
+        self._custom_render(scene,filename,show_head=False)
+        self._mask_render(scene,filename)
 
     def move_platform_up(self,z_height):
         self.light.location = (self.light.location.x, self.light.location.y, z_height + self.light_init_location[2])
@@ -375,9 +426,9 @@ class GCodeParser:
                     if param == ';':
                         break
                     
-            if is_G4P50 and render:
-                print(f"G4 P50 on Line {idx+line_num}")
-                self.render_image()
+            # if is_G4P50 and render:
+            #     print(f"G4 P50 on Line {idx+line_num}")
+            #     self.render_image()
                 
             if is_g92 and e == 0:
                 if len(self.current_layer) > 1:
@@ -403,6 +454,10 @@ class GCodeParser:
 
                 self.current_layer = []  
                 self.set_head_pos(new_head_pos)
+
+                if render:
+                    filename = line.split(":")[1].split(",")[0]
+                    self.render_image(filename)
                 break
                 
             if is_g1 or is_g0:       
