@@ -43,41 +43,43 @@ if script_dir not in sys.path:
     
 class GCodeParser:
 
-    def __init__(self) -> None:
-
-        gcode_file = 'pyramid.gcode'
+    def __init__(self, bed_size = 35, 
+                        camera_location = (-58.39, 1.85, 38.8), 
+                        camera_rotation = (math.radians(63.13), math.radians(-0.2), math.radians(-54.3)),
+                        camera_lens = 29.7,
+                        sensor_width = 45,
+                        layer_height = 0.2,
+                        layer_width = 0.4,
+                        offset = 0.02
+                        ) -> None:        
         
-        self.bed_size = 350
+        self.bed_size = bed_size * 10
         self.offset_location = mathutils.Vector((self.bed_size/2,self.bed_size/2,0))
         
         self.light_init_location = (self.bed_size/2, -17.5, 38.8) # self.offset_location + mathutils.Vector((186, -234.22, 38))
         self.light_location =  self.light_init_location
 
-        self.camera_init_location = (-58.39, 1.85, 38.8) # self.offset_location + mathutils.Vector((186, -234.22, 38))
-        self.camera_init_rotation = (math.radians(63.13), math.radians(-0.2), math.radians(-54.3))
-        self.camera_lens = 29.7
-        self.sensor_width = 45
+        self.camera_init_location = camera_location # self.offset_location + mathutils.Vector((186, -234.22, 38))
+        self.camera_init_rotation = camera_rotation
+        self.camera_lens = camera_lens
+        self.sensor_width = sensor_width
         self.head_pos = self.offset_location.copy()
 
         self.head = bpy.data.objects["Head"]
 
-        material_name = "FilamentMat"
         mask_mat_name = "MaskMat"
 
         # Get the material by name
-        self.fdm_material = bpy.data.materials.get(material_name)
+        
         self.mask_material = bpy.data.materials.get(mask_mat_name)
 
         self.remove_all()
 
         if not 'Elliptical_Bevel' in bpy.data.objects:
-            self.ellipse_bevel = self.create_ellipse_bevel("Elliptical_Bevel", major_radius=0.22, minor_radius=0.12)
+            self.ellipse_bevel = self.create_ellipse_bevel("Elliptical_Bevel", major_radius=(layer_width / 2) + offset, minor_radius=(layer_height / 2) + offset)
         else:
             self.ellipse_bevel = bpy.data.objects['Elliptical_Bevel']
 
-        # if not 'Bed' in bpy.data.objects:
-        #     self.bed = self.create_bed("Bed", size=self.bed_size)
-        # else:
         self.bed = bpy.data.objects['Bed']
 
         light_exist = any(light.name == "Light" for light in bpy.data.objects)
@@ -108,34 +110,43 @@ class GCodeParser:
             self.camera = camera_object
         else:
             self.camera = bpy.data.objects["Camera"]
-
-        with open(gcode_file, 'r') as f:
-            self.lines = f.readlines()
         
                 # Set the output path
-        
+        self.lines = []
+
         timestr = time.strftime("%Y%m%d-%H%M%S")
         cwd = Path.cwd()
 
         dir_path = f'{cwd}/images_{timestr}'
         self.dir_path = dir_path
 
+        self.fdm_material = None
         self.current_layer = []
         self.collections = []
         self.layer_number = 0
+        self.set_light(800 * 1000)
+        self.reset_location()
 
-        self.reset()
+    def set_filament_mat(self, material_name):
+        self.fdm_material = bpy.data.materials.get(material_name)
+        
+    def set_light(self, power):
+        self.light.data.energy = power
 
-    def reset(self):
+    def load_file(self, gcode_file):
+        with open(gcode_file, 'r') as f:
+            self.lines = f.readlines()
+
+    def reset_location(self):
         self.camera.location = self.camera_init_location
         self.light.location = self.light_location
+        self.head.location = (0,0,0)
 
     def create_light(self):
         light_data = bpy.data.lights.new("Light",'AREA')
         light_object = bpy.data.objects.new("Light", light_data)
 
         # light_object.data.size = 20
-        light_object.data.energy = 500 * 1000
         light_object.data.size = 50
         bpy.context.collection.objects.link(light_object)
         light_object.location = self.light_location
@@ -491,40 +502,36 @@ class GCodeParser:
         return last_line
 
 gcode = GCodeParser()
-current_line = 0
 
-def render_with_delay(render, hide_collection):       
+def render_with_delay(settings):       
     global gcode
-    global current_line
+
+    render = settings.enable_render
+    hide_collection = settings.hide_collection
+    rendering = settings.rendering
+
+    current_line = settings.current_line
+     
     line = gcode.lines[current_line]
     current_line += 1
     newLine = gcode.parse_gcode(current_line,render=render,hide_new_collection=hide_collection)
     print(f"{current_line} - {newLine}")
     current_line = newLine
     
-    if newLine == 0:
+    settings.current_line = newLine
+
+    if newLine == 0 or not rendering:
         for col in gcode.collections:
             col.hide_viewport = False
         return None
     
     return 0.1
 
-def render_without_render():       
-    global gcode
-    global current_line
-    line = gcode.lines[current_line]
-    current_line += 1
-    newLine = gcode.parse_gcode(current_line,False)
-    print(f"{current_line} - {newLine}")
-    current_line = newLine
     
-    if newLine == 0:
+def load_gcodefile(my_settings,force = False):
 
-        for col in gcode.collections:
-            col.hide_viewport = False
-        return None
-    
-    return 0.1
+    if len(gcode.lines) == 0 or force:
+        gcode.load_file(my_settings.file_path)
 
 # Define the operator to read GCode file
 class ReadGCodeOperator_Full(bpy.types.Operator):
@@ -539,16 +546,17 @@ class ReadGCodeOperator_Full(bpy.types.Operator):
             scene = context.scene
             my_settings = scene.my_settings
 
-            if (my_settings.enable_render == True):
-                print ("Property Enabled")
-            else:
-                print ("Property Disabled")
-            
-            gcode.__init__()
+            load_gcodefile(my_settings)
 
-            bpy.app.timers.register(functools.partial(render_with_delay, my_settings.enable_render, my_settings.hide_collection))
-            
-            self.report({'INFO'}, "End of GCode file reached.")
+            if len(gcode.lines) > 0:
+                my_settings.rendering = True
+
+                bpy.app.timers.register(functools.partial(render_with_delay, my_settings))
+                
+                self.report({'INFO'}, "End of GCode file reached.")
+            else:
+                self.report({'ERROR'}, f"GCode Data Empty")
+
             return {'FINISHED'}
         except Exception as e:
             self.report({'ERROR'}, f"Failed to read file: {str(e)}")
@@ -563,9 +571,10 @@ class ReadGCodeOperator_Line(bpy.types.Operator):
     
     def execute(self, context):
         try:
-            
             scene = context.scene
             my_settings = scene.my_settings
+
+            load_gcodefile(my_settings)
 
             my_settings.current_line += 1
             newLine = gcode.parse_gcode(my_settings.current_line,render=my_settings.enable_render, hide_new_collection= my_settings.hide_collection)
@@ -578,6 +587,15 @@ class ReadGCodeOperator_Line(bpy.types.Operator):
             self.report({'ERROR'}, f"Failed to read file: {str(e)}")
             return {'CANCELLED'}
 
+class StopRender(Operator):
+    bl_idname = "wm.stop_render"
+    bl_label = "Stop Render"
+
+    def execute(self, context):
+        settings = context.scene.my_settings
+        settings.rendering = False
+        return {'FINISHED'}
+        
 class GCodeReset(bpy.types.Operator):
     """Read GCode File"""
     bl_idname = "wm.gcode_reset"
@@ -585,13 +603,39 @@ class GCodeReset(bpy.types.Operator):
     
     def execute(self, context):
         try:
-    
+            scene = context.scene
+            my_settings = scene.my_settings
+            my_settings.current_line = 0
+
             gcode.__init__()
+            gcode.set_filament_mat(my_settings.material_selector)
+            load_gcodefile(my_settings,True)
+
             return {'FINISHED'}
         except Exception as e:
             self.report({'ERROR'}, f"Failed to read file: {str(e)}")
             return {'CANCELLED'}
-        
+
+def on_light_change(self, context):
+    gcode.set_light(self.light_power)
+
+def on_filamentmat_change(self, context):
+    gcode.set_filament_mat(self.material_selector)
+
+def on_file_select_change(self, context):
+    file_path = self.file_path
+
+    if file_path and file_path.lower().endswith('.gcode'):
+        print(f"Loading GCode file: {file_path}")
+        load_gcodefile(file_path,True)
+    else:
+        print("Please select a valid GCode file (.gcode)")
+
+def get_materials(self, context):
+    # This function dynamically retrieves all materials in the scene for the EnumProperty
+    items = [(mat.name, mat.name, "") for mat in bpy.data.materials]
+    return items if items else [('NONE', 'No Materials', '')]
+
 # Define a panel that will show the button
 class GCodeReaderPanel(bpy.types.Panel):
     """Creates a Panel in the scene context of the properties editor"""
@@ -607,14 +651,25 @@ class GCodeReaderPanel(bpy.types.Panel):
         scene = context.scene
         my_settings = scene.my_settings
 
+        row = layout.column()
+        layout.prop(my_settings, "material_selector")
+        row.prop(my_settings, "file_path", text="File Path")
+        row = layout.row()
+        row.prop(my_settings, "light_power", text="Brightness")
         row = layout.row()
         row.prop(my_settings, "enable_render", text="Render?")
         row.prop(my_settings, "hide_collection", text="Hide Collection")
         row = layout.row()
         row.prop(my_settings, "current_line", text="Line Number")
-        row = layout.row()
-        row.operator("wm.read_gcode", text="GCode Full")
+        row = layout.column()
+        
+        if not my_settings.rendering:
+            row.operator("wm.read_gcode", text="GCode Full")
+        else:
+            row.operator("wm.stop_render", text="Stop Render")
+
         row.operator("wm.read_gcode_line", text="GCode Line By Line")
+
         layout.operator("wm.gcode_reset", text="Reset")
 
 class MySettings(PropertyGroup):
@@ -630,6 +685,12 @@ class MySettings(PropertyGroup):
         description="Hide Newly Collection",
         default = False
         )
+    
+    rendering : BoolProperty(
+        name="Stop Render",
+        description="Stop Render",
+        default = False
+        )
 
     current_line : IntProperty(
         name = "Set a value",
@@ -637,12 +698,36 @@ class MySettings(PropertyGroup):
         default=0
         )
     
+    light_power : IntProperty(
+        name = "Set a value",
+        description="Setting the brightness of the light",
+        default=800 * 1000,
+        update=on_light_change
+        )
+    
+    material_selector : EnumProperty(
+        name="FDM Material",
+        description="Select a material",
+        default=2,
+        items=get_materials,
+        update=on_filamentmat_change
+    )
+    
+    file_path : StringProperty(
+        name="Select File",
+        description="Select a file to load",
+        default=os.getcwd(),
+        subtype='FILE_PATH',
+        update=on_file_select_change
+    )
+    
 classes = (
     MySettings,
     ReadGCodeOperator_Full,
     ReadGCodeOperator_Line,
     GCodeReset,
-    GCodeReaderPanel
+    GCodeReaderPanel,
+    StopRender
 )
 
 # Register and Unregister Classes
