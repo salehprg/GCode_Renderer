@@ -23,7 +23,7 @@ def create_video(image_folder,prefix):
     video.release()
 
 
-image_folder = 'images_20241030-020354'
+image_folder = 'images_20241101-114610'
 create_video(image_folder,"bed")
 create_video(image_folder,"msk")
 create_video(image_folder,"sim")
