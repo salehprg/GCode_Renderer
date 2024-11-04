@@ -75,6 +75,11 @@ class GCodeParser:
 
         self.remove_all()
 
+        if not 'guide_bed' in bpy.data.objects:
+            guide_bed = self.create_bed("guide_bed", bed_size * 10)
+            guide_bed.hide_viewport = True
+            guide_bed.hide_render = True
+
         if not 'Elliptical_Bevel' in bpy.data.objects:
             self.ellipse_bevel = self.create_ellipse_bevel("Elliptical_Bevel", major_radius=(layer_width / 2) + offset, minor_radius=(layer_height / 2) + offset)
         else:
@@ -342,6 +347,9 @@ class GCodeParser:
         scene.render.filepath = file_path
 
         for obj in bpy.data.objects:
+            if obj.name.find("guide_bed") != -1:
+                continue
+            
             if obj.type not in {'LIGHT', 'CAMERA'}:
                 obj.hide_viewport = True
                 obj.hide_render = True
@@ -353,6 +361,9 @@ class GCodeParser:
         bpy.ops.render.render(write_still=True)
 
         for obj in bpy.data.objects:
+            if obj.name.find("guide_bed") != -1:
+                continue
+
             obj.hide_viewport = False
             obj.hide_render = False
 

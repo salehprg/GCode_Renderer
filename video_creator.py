@@ -23,8 +23,10 @@ def create_video(image_folder,prefix):
     video.release()
 
 
-image_folder = 'images_20241101-114610'
+image_folder = 'images_20241104-230453'
 create_video(image_folder,"bed")
+print("Bed Video has been created successfully!")
 create_video(image_folder,"msk")
+print("Mask Video has been created successfully!")
 create_video(image_folder,"sim")
-print("Video has been created successfully!")
+print("Sim Video has been created successfully!")
