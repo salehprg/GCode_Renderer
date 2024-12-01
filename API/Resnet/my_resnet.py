@@ -1,7 +1,9 @@
 import json
+import os
+from pathlib import Path
 import torch.nn as nn
 import torchvision.models as models
-from preprocess import PreProcess
+from .preprocess import PreProcess
 
 class ResnetModel(nn.Module):
     def __init__(self):
@@ -10,7 +12,8 @@ class ResnetModel(nn.Module):
         self.model.eval()
         self.preprocess = PreProcess()
 
-        with open('class_names.json') as f:
+        path = Path(__file__)
+        with open(os.path.join(path.parent,'class_names.json')) as f:
             self.class_labels = json.load(f)
         pass
 
