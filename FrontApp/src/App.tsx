@@ -36,7 +36,7 @@ function App() {
           "Content-Type": "application/json",
         },
       });
-  
+
       console.log("Form submission success:", response.data);
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -50,19 +50,30 @@ function App() {
 
   // Handler for file selection
   const handleFileSelect = (key: string) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.webkitdirectory = true; // Allows folder selection
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        setFormState((prevState) => ({
-          ...prevState,
-          [key]: file.webkitRelativePath.split("/")[0], // Store the folder path
-        }));
-      }
-    };
-    input.click();
+
+    if (window.electronAPI) {
+      window.electronAPI.selectFolder().then(folderPaths => {
+        if (folderPaths.length > 0) {
+          console.log('Selected folder:', folderPaths[0]);
+          alert(`You selected: ${folderPaths[0]}`);
+        } else {
+          console.log('No folder selected.');
+        }
+      });
+    }
+    // const input = document.createElement("input");
+    // input.type = "file";
+    // input.webkitdirectory = true; // Allows folder selection
+    // input.onchange = (e) => {
+    //   const file = (e.target as HTMLInputElement).files?.[0];
+    //   if (file) {
+    //     setFormState((prevState) => ({
+    //       ...prevState,
+    //       [key]: file.webkitRelativePath.split("/")[0], // Store the folder path
+    //     }));
+    //   }
+    // };
+    // input.click();
   };
 
   // Handler for input changes
@@ -241,11 +252,11 @@ function App() {
         </Box>
       </Box>
       <Button
-          variant="contained"
-          onClick={() => handleSubmit()}
-        >
-          Submit
-        </Button>
+        variant="contained"
+        onClick={() => handleSubmit()}
+      >
+        Submit
+      </Button>
     </Box>
   );
 }

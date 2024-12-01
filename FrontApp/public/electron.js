@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 
 let mainWindow;
@@ -8,14 +8,20 @@ const createWindow = () => {
         width: 800,
         height: 600,
         webPreferences: {
+            preload: __dirname + '/preload.js',
             nodeIntegration: true,
         },
     });
 
-    const startURL =
-        process.env.ELECTRON_START_URL || `file://${path.join(__dirname, '../build/index.html')}`;
+    mainWindow.loadURL('http://localhost:3000');
 
-    mainWindow.loadURL(startURL);
+    ipcMain.handle('select-folder', async () => {
+        const result = await dialog.showOpenDialog(mainWindow, {
+            properties: ['openDirectory'],
+        });
+
+        return result.filePaths; // Send selected folder path(s) to the renderer
+    });
 
     mainWindow.on('closed', () => (mainWindow = null));
 };
