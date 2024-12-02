@@ -2,7 +2,6 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
-  "main": "public/electron.js",
   "dependencies": {
     "@emotion/react": "^11.13.5",
     "@emotion/styled": "^11.13.5",
@@ -15,6 +14,7 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "axios": "^1.7.8",
+    "electron-is-dev": "^3.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-scripts": "5.0.1",
@@ -23,9 +23,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
-    "electron:start": "concurrently \"npm:start\" \"wait-on http://localhost:3000 && electron .\"",
-    "electron:build": "npm run build && electron ."
+    "build": "react-scripts build"
   },
   "eslintConfig": {
     "extends": [

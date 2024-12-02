@@ -3,3 +3,5 @@ images/
 *.zip
 video_*.mp4
 node_modules/
+dist/
+__pycache__/

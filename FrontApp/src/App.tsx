@@ -13,6 +13,14 @@ import {
 } from "@mui/material";
 import axios from 'axios';
 
+declare global {
+  interface Window {
+    electron: {
+      openFolder: () => Promise<string | undefined>;
+    };
+  }
+}
+
 function App() {
   const [formState, setFormState] = useState({
     inputImagesFolder: "",
@@ -49,31 +57,13 @@ function App() {
   };
 
   // Handler for file selection
-  const handleFileSelect = (key: string) => {
-
-    if (window.electronAPI) {
-      window.electronAPI.selectFolder().then(folderPaths => {
-        if (folderPaths.length > 0) {
-          console.log('Selected folder:', folderPaths[0]);
-          alert(`You selected: ${folderPaths[0]}`);
-        } else {
-          console.log('No folder selected.');
-        }
-      });
-    }
-    // const input = document.createElement("input");
-    // input.type = "file";
-    // input.webkitdirectory = true; // Allows folder selection
-    // input.onchange = (e) => {
-    //   const file = (e.target as HTMLInputElement).files?.[0];
-    //   if (file) {
-    //     setFormState((prevState) => ({
-    //       ...prevState,
-    //       [key]: file.webkitRelativePath.split("/")[0], // Store the folder path
-    //     }));
-    //   }
-    // };
-    // input.click();
+  const handleFileSelect = async (key: string) => {
+    console.log(window.electron)
+    const selectedPath = await window.electron.openFolder();
+    setFormState((prevState) => ({
+      ...prevState,
+      [key]: selectedPath, // Store the folder path
+    }));
   };
 
   // Handler for input changes

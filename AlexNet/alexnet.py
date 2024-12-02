@@ -10,9 +10,7 @@ class AlexNetModel(nn.Module):
         self.model.eval()
         self.preprocess = PreProcess()
 
-        self.block1 = self.model.features[:4] 
-        self.block2 = self.model.features[4:8] 
-        self.block3 = self.model.features[8:] 
+        
 
 
         with open('class_names.json') as f:

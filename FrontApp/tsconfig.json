@@ -23,7 +23,5 @@
     "outDir": "./dist" // Specify the output directory for compiled JS files
   },
   "include": [
-    "src",
-    "global.d.ts"
-  ]
+    "src"]
 }

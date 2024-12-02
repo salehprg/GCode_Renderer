@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict
 import torch
 import uvicorn
-from Resnet import ResnetModel
+from Resnet import *
 from PIL import Image
 
 model = ResnetModel()
@@ -41,17 +41,16 @@ async def submit_form(data: FormData):
     global parameters
     print("Received Form Data:", data.dict())
 
-    # Validate or process the data here as needed
     if not data.inputImagesFolder or not data.referenceImagesFolder or not data.maskImagesFolder:
         raise HTTPException(status_code=400, detail="All folder paths must be provided.")
 
     parameters = data.dict()
+
     return {
         "message": "Form data received successfully",
         "receivedData": data.dict()
     }
 
-# Root endpoint for testing
 
 @app.get("/test")
 def test_image():
