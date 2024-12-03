@@ -8,3 +8,5 @@ __pycache__/
 *_images/
 result_resnet/
 build/
+API/UI/
+ElectronApp/static/

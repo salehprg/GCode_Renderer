@@ -38,6 +38,11 @@ function App() {
     alarmTriggerCount: 5,
   });
   const [loading, setLoading] = useState(false)
+  const [videos, setVideos] = useState({
+    videos_score_map: "",
+    videos_result_mask: "",
+    videos_final: "",
+  })
 
   const handleSubmit = async () => {
     setLoading(true)
@@ -49,6 +54,8 @@ function App() {
       });
 
       console.log("Form submission success:", response.data);
+
+      setVideos(response.data)
     } catch (error) {
       if (axios.isAxiosError(error)) {
         alert(error.response?.data.detail)
@@ -247,6 +254,14 @@ function App() {
           />
         </Box>
       </Box>
+      {(!loading && videos.videos_final !== '') && <Box sx={{display: 'flex', flexDirection:'column', gap:'12px'}}>
+        {/* <TextField size='small' disabled label="Mask Video" value={videos.videos_result_mask} />
+        <TextField size='small' disabled label="Score Video" value={videos.videos_score_map} />
+        <TextField size='small' disabled label="Final Video" value={videos.videos_final} /> */}
+        <a href={videos.videos_result_mask} download>Mask Video</a>
+        <a href={videos.videos_score_map} download>Score Map Video</a>
+        <a href={videos.videos_final} download>Final Video</a>
+      </Box>}
       <Button
         variant="contained"
         disabled={loading}

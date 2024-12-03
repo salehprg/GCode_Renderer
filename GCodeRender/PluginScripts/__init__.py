@@ -15,7 +15,7 @@ bl_info = {
     "name": "GCode Parser",
     "description": "Simulate 3D Printer",
     "author": "Saleh Ebrahimian",
-    "version": (0, 0, 1),
+    "version": (1, 0, 1),
     "blender": (4, 2, 1),
     "location": "GCode > GCode PA",
     "warning": "",

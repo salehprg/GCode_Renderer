@@ -376,8 +376,7 @@ class GCodeParser:
         scene.render.resolution_percentage = 100
 
         # Set the render file format
-        scene.render.image_settings.file_format = 'JPEG'
-        scene.render.image_settings.quality = 100
+        scene.render.image_settings.file_format = 'PNG'
 
         # counter = 1
         # while os.path.exists(file_path):
