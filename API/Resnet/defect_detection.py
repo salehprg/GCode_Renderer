@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from my_resnet import ResnetModel
+from .my_resnet import ResnetModel
 from scipy.ndimage import zoom
 
 class DefectDetection:

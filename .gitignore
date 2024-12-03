@@ -5,3 +5,6 @@ video_*.mp4
 node_modules/
 dist/
 __pycache__/
+*_images/
+result_resnet/
+build/

@@ -10,6 +10,7 @@ import {
   Radio,
   Typography,
   Checkbox,
+  CircularProgress,
 } from "@mui/material";
 import axios from 'axios';
 
@@ -36,8 +37,10 @@ function App() {
     defectAreaThreshold: 900,
     alarmTriggerCount: 5,
   });
+  const [loading, setLoading] = useState(false)
 
   const handleSubmit = async () => {
+    setLoading(true)
     try {
       const response = await axios.post("http://127.0.0.1:8000/submit-form", formState, {
         headers: {
@@ -53,6 +56,9 @@ function App() {
       } else {
         console.error("Unexpected error:", error);
       }
+    }
+    finally {
+      setLoading(false)
     }
   };
 
@@ -243,9 +249,10 @@ function App() {
       </Box>
       <Button
         variant="contained"
+        disabled={loading}
         onClick={() => handleSubmit()}
       >
-        Submit
+        {loading ? <CircularProgress /> : "Submit"}
       </Button>
     </Box>
   );

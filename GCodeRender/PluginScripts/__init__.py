@@ -150,18 +150,20 @@ class GCodeReset(bpy.types.Operator):
             scene = context.scene
             my_settings = scene.my_settings
             my_settings.current_line = 0
-            my_settings.enable_render = True
+            my_settings.enable_render = False
             my_settings.hide_collection = False
             my_settings.rendering = False
             my_settings.cam_lens = 29.6
             my_settings.sen_width = 45
+            my_settings.layer_width = 0.4
+            my_settings.layer_height = 0.2
             my_settings.light_power = 1200 * 1000
             my_settings.material_selector = "FilamentMat"
             # my_settings.file_path = os.getcwd()
             # my_settings.save_path = os.getcwd()
 
             gcode.__init__(context=context, camera_lens=my_settings.cam_lens,sensor_width=my_settings.sen_width,
-                           layer_height=0.2, layer_width=0.4)
+                           layer_height=my_settings.layer_height, layer_width=my_settings.layer_width)
             
             on_setting_change(my_settings, None)
 
@@ -177,6 +179,8 @@ def on_setting_change(self, context):
     gcode.set_light(self.light_power)
     gcode.set_filament_mat(self.material_selector)
 
+    gcode.set_elip_bevel(self.layer_height,self.layer_width)
+    
     save_path = self.save_path
     if save_path:
         print(f"Save Path Set: {save_path}")
@@ -218,9 +222,13 @@ class GCodeReaderPanel(bpy.types.Panel):
         if not gcode_init:
             layout.operator("wm.gcode_reset", text="Press this Button To Start")
         else:
-            layout.prop(my_settings, "material_selector")
             row.prop(my_settings, "file_path", text="File Path")
             row.prop(my_settings, "save_path", text="Save Path")
+            row = layout.row()
+            row.prop(my_settings, "material_selector")
+            row = layout.row()
+            row.prop(my_settings, "layer_width", text="Layer Width")
+            row.prop(my_settings, "layer_height", text="Layer Height")
             row = layout.row()
             row.prop(my_settings, "sen_width", text="Sensor")
             row.prop(my_settings, "cam_lens", text="Lens")
@@ -261,7 +269,7 @@ class MySettings(PropertyGroup):
     rendering : BoolProperty(
         name="Stop Render",
         description="Stop Render",
-        default = True
+        default = False
         )
 
     current_line : IntProperty(
@@ -281,6 +289,20 @@ class MySettings(PropertyGroup):
         name = "Set a value",
         description="Setting the sensor width",
         default=45,
+        update=on_setting_change
+        )
+    
+    layer_width : FloatProperty(
+        name = "Set a value",
+        description="Setting the layer width",
+        default=0.4,
+        update=on_setting_change
+        )
+    
+    layer_height : FloatProperty(
+        name = "Set a value",
+        description="Setting the layer height",
+        default=0.2,
         update=on_setting_change
         )
     

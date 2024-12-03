@@ -5,7 +5,7 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
-from preprocess import PreProcess
+from .preprocess import PreProcess
 
 class ResnetModel(nn.Module):
     def __init__(self):

@@ -4,7 +4,7 @@ const path = require('path');
 const express = require('express');
 const server = express();
 const port = 3001;
-server.use(express.static(path.join(__dirname, '../FrontApp/build/'))); // Serve React build files
+server.use(express.static(path.join(__dirname, '/build/'))); // Serve React build files
 
 server.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
@@ -13,6 +13,7 @@ server.listen(port, () => {
 let mainWindow;
 
 function createWindow() {
+    console.log(process.cwd())
     mainWindow = new BrowserWindow({
         width: 1024,
         height: 720,
@@ -35,7 +36,7 @@ ipcMain.handle('dialog:open-folder', async () => {
         properties: ['openDirectory'], // Select folder
     });
 
-    return result.filePaths; // Returns an array of selected folder paths
+    return result.filePaths[0]; // Returns an array of selected folder paths
 });
 
 app.whenReady().then(createWindow);

@@ -82,10 +82,7 @@ class GCodeParser:
         self.layer_number = 0
         self.last_e = 0
 
-        if not 'Elliptical_Bevel' in bpy.data.objects:
-            self.ellipse_bevel = self.create_ellipse_bevel("Elliptical_Bevel", major_radius=(layer_width / 2) + offset, minor_radius=(layer_height / 2) + offset)
-        else:
-            self.ellipse_bevel = bpy.data.objects['Elliptical_Bevel']
+        self.set_elip_bevel(layer_height, layer_width)
 
         self.bed = bpy.data.objects['Bed']
 
@@ -109,7 +106,12 @@ class GCodeParser:
         
         self.dir_path = dir_path
 
-
+    def set_elip_bevel(self, layer_height, layer_width):
+        if 'Elliptical_Bevel' in bpy.data.objects:
+            bpy.data.objects.remove(bpy.data.objects['Elliptical_Bevel'])
+        
+        self.ellipse_bevel = self.create_ellipse_bevel("Elliptical_Bevel", major_radius=(layer_width / 2), minor_radius=(layer_height / 2) + 0.02)
+            
     def set_context(self, context):
         self.context = context
 
@@ -374,7 +376,8 @@ class GCodeParser:
         scene.render.resolution_percentage = 100
 
         # Set the render file format
-        scene.render.image_settings.file_format = 'PNG'
+        scene.render.image_settings.file_format = 'JPEG'
+        scene.render.image_settings.quality = 100
 
         # counter = 1
         # while os.path.exists(file_path):
