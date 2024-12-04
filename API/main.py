@@ -52,7 +52,9 @@ def detect(image_real_path, image_ref_path, image_mask_path, save_folder, lp_val
     os.makedirs(save_folder, exist_ok=True)
 
     image_real= Image.open(image_real_path)
+    image_real = image_real.convert("RGB")
     image_ref= Image.open(image_ref_path)
+    image_ref = image_real.convert("RGB")
     image_mask = Image.open(image_mask_path).convert("L")
     
     binary_mask = np.array(image_mask) > 128
@@ -190,6 +192,8 @@ async def submit_form(data: FormData):
     list_files = os.listdir(parameters.inputImagesFolder)
     selected_files = list_files if sample_count == -1 else list_files[:sample_count]
 
+    save_folder = "result_resnet"
+    
     for img_inpt in selected_files:
         lp_value = extract_lp_value(img_inpt)
         
@@ -197,9 +201,7 @@ async def submit_form(data: FormData):
             ref_image = dst_file_dict[lp_value]
             mask_image = mask_file_dict[lp_value]
             img_path = os.path.join(parameters.inputImagesFolder, img_inpt)
-            
-            save_folder = "result_resnet"
-            
+
             blue_color = (255, 0, 0)
             red_color = (0, 0, 255)
         
