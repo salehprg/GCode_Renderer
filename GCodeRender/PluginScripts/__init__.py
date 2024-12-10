@@ -1,13 +1,15 @@
 import os
 import sys
 
+
 plugin_path = os.path.dirname(__file__)
 if plugin_path not in sys.path:
     sys.path.append(plugin_path)
 
+
+from GCodeParser import GCodeParser
 import functools
 import bpy
-from GCodeParser import GCodeParser
 import functools
 
 
@@ -52,12 +54,8 @@ def render_with_delay(settings):
     rendering = settings.rendering
 
     current_line = settings.current_line
-     
-    line = gcode.lines[current_line]
-    current_line += 1
     newLine = gcode.parse_gcode(current_line,render=render,hide_new_collection=hide_collection)
     print(f"{current_line} - {newLine}")
-    current_line = newLine
     
     settings.current_line = newLine
 
@@ -66,7 +64,7 @@ def render_with_delay(settings):
             col.hide_viewport = False
         return None
     
-    return 0.1
+    return 0.001
 
     
 def load_gcodefile(my_settings,force = False):
@@ -119,7 +117,6 @@ class ReadGCodeOperator_Line(bpy.types.Operator):
             gcode.set_context(context=context)
             load_gcodefile(my_settings)
 
-            my_settings.current_line += 1
             newLine = gcode.parse_gcode(my_settings.current_line,render=my_settings.enable_render, hide_new_collection= my_settings.hide_collection)
             print(f"{my_settings.current_line} - {newLine}")
             my_settings.current_line = newLine

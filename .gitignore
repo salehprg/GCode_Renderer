@@ -10,3 +10,5 @@ result_resnet/
 build/
 API/UI/
 ElectronApp/static/
+UI/API/UI/
+UI/ElectronApp/static/

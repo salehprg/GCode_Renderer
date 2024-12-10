@@ -413,100 +413,101 @@ class GCodeParser:
         if len(self.current_layer) > 1:
             self.close_curve()
 
-        self.last_e = 0
+        # self.last_e = 0
         self.current_layer = []
         
-    def parse_gcode(self,line_num,render = True,hide_new_collection=True):
+    def parse_gcode(self,line_num:int,render = True,hide_new_collection=True):
 
-        lines = self.lines[line_num:]
-        last_line = 0
-
-        for idx,line in enumerate(lines):
-            last_line = idx+line_num
-            
+        if line_num > len(self.lines) - 1:
+            return 0
+        
+        for idx,line in enumerate(self.lines[line_num:]):
             is_g0 = line.startswith('G0')
             is_g1 = line.startswith('G1')
             is_g92 = line.startswith('G92')
             is_M118 = line.startswith('M118')
             is_G4P50 = line.startswith('G4 P50')
-            is_comment = line.startswith(';')
-            
-            if is_comment:
-                continue
-            
-            x = y = z = e = None
+            # is_comment = line.startswith(';') or len(line.replace(" ","")) == 0
+            next_line = idx + line_num + 1
 
-            if is_g92 or is_g0 or is_g1:
-                params = line.split()
-                for param in params:
-                    if param.startswith('X'):
-                        x = float(param[1:])
-                    if param.startswith('Y'):
-                        y = float(param[1:])
-                    if param.startswith('Z'):
-                        z = float(param[1:])
-                    if param.startswith('E'):
-                        e = float(param[1:])
+            if is_g0 or is_g1 or is_g92 or is_M118 or is_G4P50:
+                x = y = z = e = None
 
-                    if param == ';':
-                        break
+                if is_g92 or is_g0 or is_g1:
+                    params = line.split()
+                    for param in params:
+                        if param.startswith('X'):
+                            x = float(param[1:])
+                        if param.startswith('Y'):
+                            y = float(param[1:])
+                        if param.startswith('Z'):
+                            z = float(param[1:])
+                        if param.startswith('E'):
+                            e = float(param[1:])
+
+                        if param == ';':
+                            break
+                        
+                # if is_G4P50 and render:
+                #     print(f"G4 P50 on Line {idx+line_num}")
+                #     self.render_image()
                     
-            # if is_G4P50 and render:
-            #     print(f"G4 P50 on Line {idx+line_num}")
-            #     self.render_image()
+                new_head_pos = self.head_pos.copy()
                 
-            new_head_pos = self.head_pos.copy()
-            
-            if is_g92 and e == 0:
-                self.close_current_loop()        
+                if is_g92 and e == 0:
+                    self.last_e = 0
+                    self.close_current_loop()        
 
-            if is_M118:
-                new_collection = bpy.data.collections.new(f'Collection_{self.layer_number}')
-                self.context.scene.collection.children.link(new_collection)
-                if len(self.collections) > 0 and hide_new_collection:
-                    self.collections[-1].hide_viewport = True
+                if is_M118:
+                    new_collection = bpy.data.collections.new(f'Collection_{self.layer_number}')
+                    self.context.scene.collection.children.link(new_collection)
+                    if len(self.collections) > 0 and hide_new_collection:
+                        self.collections[-1].hide_viewport = True
 
-                self.collections.append(new_collection)
+                    self.collections.append(new_collection)
 
-                self.layer_number += 1
+                    self.layer_number += 1
 
-                self.close_current_loop()
-                self.set_head_pos(new_head_pos)
-
-                if render:
-                    filename = line.split(":")[1].split(",")[0]
-                    self.render_image(filename)
-                break
-                
-            if is_g1 or is_g0:       
-
-                if x is not None:
-                    new_head_pos.x = x
-
-                if y is not None:
-                    new_head_pos.y = y
-
-                if z is not None:
-                    new_head_pos.z = z
-
-                if e is not None and e > self.last_e: #Extrusion Happen
-                    self.last_e = e
-                    new_pos_tup = (new_head_pos.x, new_head_pos.y, new_head_pos.z)
-                    head_pos_tup = (self.head_pos.x, self.head_pos.y, self.head_pos.z)
-                        
-                    if len(self.current_layer) == 0:
-                        self.current_layer.append(head_pos_tup)
-                        self.current_layer.append(new_pos_tup)
-                    else:
-                        self.current_layer.append(new_pos_tup)
-                        
-                elif e is not None and e < self.last_e:
                     self.close_current_loop()
+                    self.set_head_pos(new_head_pos)
 
-                self.set_head_pos(new_head_pos)
+                    if render:
+                        filename = line.split(":")[1].split(",")[0]
+                        self.render_image(filename)
+                    return next_line
+                    
+                if is_g1 or is_g0:       
+
+                    if x is not None:
+                        new_head_pos.x = x
+
+                    if y is not None:
+                        new_head_pos.y = y
+
+                    if z is not None:
+                        new_head_pos.z = z
+
+                    if e is not None and e - self.last_e > 0:
+                        self.last_e = e
+                        new_pos_tup = (new_head_pos.x, new_head_pos.y, new_head_pos.z)
+                        head_pos_tup = (self.head_pos.x, self.head_pos.y, self.head_pos.z)
+                            
+                        if len(self.current_layer) == 0:
+                            self.current_layer.append(head_pos_tup)
+                            self.current_layer.append(new_pos_tup)
+                        else:
+                            self.current_layer.append(new_pos_tup)
+                            
+                    elif e is not None and e - self.last_e < 0:
+                        self.close_current_loop()
+
+                    if e is None:
+                        self.close_current_loop()
+
+                    self.set_head_pos(new_head_pos)
+
 
         if self.current_layer:
-            self.close_curve()
+            self.close_current_loop()
 
-        return last_line
-
+        return next_line
