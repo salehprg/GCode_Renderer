@@ -111,7 +111,7 @@ def detect(image_real_path, image_ref_path, image_mask_path, save_folder, lp_val
     return has_detect
 
 def extract_sim_lp_value(filename):
-    match = re.search(r'sim_([0-9\.\-]+)', filename)
+    match = re.search(r'Z_lp([0-9\.\-]+)', filename)
     if match:
         return match.group(1).removesuffix(".")
     return None
@@ -123,7 +123,7 @@ def extract_lp_value(filename):
     return None
 
 def extract_mask_z_value(filename):
-    match = re.search(r'msk_([0-9\.\-]+)', filename)
+    match = re.search(r'Z_lp([0-9\.\-]+)', filename)
     if match:
         return match.group(1).removesuffix(".")
     return None

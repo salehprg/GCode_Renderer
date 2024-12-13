@@ -17,7 +17,7 @@ bl_info = {
     "name": "GCode Parser",
     "description": "Simulate 3D Printer",
     "author": "Saleh Ebrahimian",
-    "version": (1, 0, 1),
+    "version": (1, 1, 1),
     "blender": (4, 2, 1),
     "location": "GCode > GCode PA",
     "warning": "",
@@ -248,6 +248,7 @@ class GCodeReaderPanel(bpy.types.Panel):
             row.operator("wm.read_gcode_line", text="GCode Line By Line")
 
             layout.operator("wm.gcode_reset", text="Reset")
+        layout.label(text=f"version {bl_info['version'][0]}.{bl_info['version'][1]}.{bl_info['version'][2]}")
 
 class MySettings(PropertyGroup):
 

@@ -306,13 +306,13 @@ class GCodeParser:
         return curve_obj
 
     def _full_render(self,scene,filename):
-        file_path = f'{self.dir_path}/sim_{filename}.png'
+        file_path = f'{self.dir_path}/sim_Z_lp{filename}.png'
         scene.render.filepath = file_path
 
         bpy.ops.render.render(write_still=True)
 
     def _custom_render(self,scene,filename,show_head=True,show_bed=True):
-        file_path = f'{self.dir_path}/bed_{filename}.png'
+        file_path = f'{self.dir_path}/bed_Z_lp{filename}.png'
         scene.render.filepath = file_path
 
         if not show_head:
@@ -334,7 +334,7 @@ class GCodeParser:
             self.bed.hide_render = False
         
     def _mask_render(self,scene,filename):
-        file_path = f'{self.dir_path}/msk_{filename}.png'
+        file_path = f'{self.dir_path}/msk_Z_lp{filename}.png'
         scene.render.filepath = file_path
 
         for obj in bpy.data.objects:
