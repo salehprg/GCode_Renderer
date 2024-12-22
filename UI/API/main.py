@@ -1,10 +1,12 @@
 import argparse
 from datetime import datetime
 import os
+from pathlib import Path
 import re
 import subprocess
 import sys
 import threading
+import time
 import cv2
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,7 +21,6 @@ from Resnet.defect_detection import DefectDetection
 defectDetection = DefectDetection()
 
 app = FastAPI()
-sample_count = -1
 
 app.add_middleware(
     CORSMiddleware,
@@ -44,6 +45,7 @@ class FormData(BaseModel):
     defectScoreThreshold: int
     defectAreaThreshold: int
     alarmTriggerCount: int
+    sampleCount: int
 
 parameters = None
 
@@ -54,7 +56,7 @@ def detect(image_real_path, image_ref_path, image_mask_path, save_folder, lp_val
     image_real= Image.open(image_real_path)
     image_real = image_real.convert("RGB")
     image_ref= Image.open(image_ref_path)
-    image_ref = image_real.convert("RGB")
+    image_ref = image_ref.convert("RGB")
     image_mask = Image.open(image_mask_path).convert("L")
     
     binary_mask = np.array(image_mask) > 128
@@ -75,7 +77,7 @@ def detect(image_real_path, image_ref_path, image_mask_path, save_folder, lp_val
     labeled_image = measure.label(result_image, connectivity=2)
     stats = measure.regionprops(labeled_image)
 
-    d1 = np.isin(labeled_image, [i + 1 for i, stat in enumerate(stats) if stat.area >= defect_area_th])
+    # d1 = np.isin(labeled_image, [i + 1 for i, stat in enumerate(stats) if stat.area >= defect_area_th])
 
     # labeled_image = measure.label(d1, connectivity=2)
     # stats = measure.regionprops(labeled_image)
@@ -89,9 +91,8 @@ def detect(image_real_path, image_ref_path, image_mask_path, save_folder, lp_val
     for region in stats:  
         if region.area >= defect_area_th:
             has_detect = True
-            
-        min_row, min_col, max_row, max_col = region.bbox
-        cv2.rectangle(cv2_image, (min_col, min_row), (max_col, max_row), defect_color, 1)
+            min_row, min_col, max_row, max_col = region.bbox
+            cv2.rectangle(cv2_image, (min_col, min_row), (max_col, max_row), defect_color, 1)
         
     name = lp_value
     
@@ -111,7 +112,7 @@ def detect(image_real_path, image_ref_path, image_mask_path, save_folder, lp_val
     return has_detect
 
 def extract_sim_lp_value(filename):
-    match = re.search(r'sim_([0-9\.\-]+)', filename)
+    match = re.search(r'Z_lp([0-9\.\-]+)', filename)
     if match:
         return match.group(1).removesuffix(".")
     return None
@@ -123,7 +124,7 @@ def extract_lp_value(filename):
     return None
 
 def extract_mask_z_value(filename):
-    match = re.search(r'msk_([0-9\.\-]+)', filename)
+    match = re.search(r'Z_lp([0-9\.\-]+)', filename)
     if match:
         return match.group(1).removesuffix(".")
     return None
@@ -154,10 +155,6 @@ def create_video(save_folder, image_folder,prefix):
 
     return output_video
     
-@app.get("/submit-form")
-async def submit_form():
-    return {"data" : "Saleh"}
-
 @app.post("/submit-form")
 async def submit_form(data: FormData):
     global parameters
@@ -194,9 +191,10 @@ async def submit_form(data: FormData):
     counter = 0
 
     list_files = os.listdir(parameters.inputImagesFolder)
-    selected_files = list_files if sample_count == -1 else list_files[:sample_count]
+    selected_files = list_files if data.sampleCount == 0 else list_files[:data.sampleCount]
 
-    save_folder = "result_resnet"
+    time_str = time.strftime("%Y%m%d-%H%M%S")
+    save_folder = f"result_resnet_{time_str}"
     
     for img_inpt in selected_files:
         lp_value = extract_lp_value(img_inpt)
@@ -218,7 +216,7 @@ async def submit_form(data: FormData):
             if has_detect:
                 counter += 1
 
-    video_folder = "result_video"
+    video_folder = f"result_video_{time_str}"
     videos_score_map = create_video(video_folder, save_folder,"score_map_")
     videos_result_mask = create_video(video_folder, save_folder,"result_mask_")
     videos_final = create_video(video_folder, save_folder,"final_")
@@ -230,7 +228,25 @@ async def submit_form(data: FormData):
         "videos_final": videos_final,
     }
 
+@app.get("/count-images")
+async def count_images(folder_path: str):
+    try:
+        # Validate the folder path
+        
+        if folder_path == "":
+            return {'images_count': 0}
+        folder = Path(folder_path)
+        if not folder.exists() or not folder.is_dir():
+            raise HTTPException(status_code=400, detail="Invalid folder path")
 
+        # Count image files
+        image_extensions = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tiff"}
+        images_count = sum(1 for file in folder.iterdir() if file.suffix.lower() in image_extensions)
+
+        return {"images_count": images_count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
 @app.get("/")
 def read_root():
     return {"message": "API is running"}
@@ -248,14 +264,11 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Defect Detection App arguments")
     parser.add_argument("--ui", type=bool,default=False, help="Show UI App")
-    parser.add_argument("--samples", type=int,default=-1, help="Images samples count to read from input folder")
-
+    
     args = parser.parse_args()
 
     print(f"UI: {args.ui}")
-    print(f"Sample Counts: {args.samples}")
 
-    sample_count = args.samples
     if args.ui:
         exe_thread = threading.Thread(target=run_exe)
         exe_thread.start()

@@ -6,7 +6,7 @@ node_modules/
 dist/
 __pycache__/
 *_images/
-result_resnet/
+result_resnet*/
 build/
 API/UI/
 ElectronApp/static/

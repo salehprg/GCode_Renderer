@@ -3,13 +3,33 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
+import { createTheme, ThemeProvider } from '@mui/material';
+
+const theme = createTheme({
+  components: {
+    // Customize the TextField component
+    MuiTextField: {
+      defaultProps: {
+        size: 'small', // Set the default size to "small"
+      },
+      styleOverrides: {
+        root: {
+          // Add any additional styling here
+          margin: '0px 0', // Example: add margin
+        },
+      },
+    },
+  },
+});
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
 root.render(
   <React.StrictMode>
-    <App />
+    <ThemeProvider theme={theme}>
+      <App />
+    </ThemeProvider>
   </React.StrictMode>
 );
 

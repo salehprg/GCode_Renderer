@@ -5,16 +5,17 @@ let mainWindow;
 const express = require('express');
 const server = express();
 const port = 3001;
-server.use(express.static(path.join(__dirname, '/static/'))); // Serve React build files
 
+server.use(express.static(path.join(__dirname, '/static/'))); // Serve React build files
 server.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
 });
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1024,
-    height: 720,
+    width: 720,
+    height: 800,
+    maxWidth:720,
     webPreferences: {
       contextIsolation: true, // Enable context isolation
       enableRemoteModule: false, // Disable the remote module for security
