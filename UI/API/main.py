@@ -15,7 +15,7 @@ import numpy as np
 from pydantic import BaseModel
 import uvicorn
 from PIL import Image
-from skimage import measure, color
+from skimage import measure, color, filters
 from Resnet.defect_detection import DefectDetection
 
 defectDetection = DefectDetection()
@@ -63,36 +63,29 @@ def detect(image_real_path, image_ref_path, image_mask_path, save_folder, lp_val
     binary_mask = (binary_mask * 255).astype(np.uint8)
     
     defect_mask, distance_np_image = defectDetection.detect(image_real, image_ref,concat_blocks=concat_blocks)
+    defect_mask_crop = cv2.bitwise_and(defect_mask,defect_mask,mask=binary_mask)
+    defect_mask_crop[defect_mask_crop < defect_score_th] = 0
 
-    defect_mask = cv2.bitwise_and(defect_mask,defect_mask,mask=binary_mask)
-    # distance_np_image = cv2.bitwise_and(distance_np_image,distance_np_image,mask=image_mask)
-    
-
-    image_real_np = cv2.cvtColor(np.array(image_real), cv2.COLOR_RGB2GRAY)
-    result_image = image_real_np * defect_mask
-    result_image[result_image < defect_score_th] = 0
-
-    result_image = np.clip(result_image, 0, 255)
-
-    labeled_image = measure.label(result_image, connectivity=2)
+    threshold_value = filters.threshold_otsu(defect_mask_crop)  # Otsu's method for automatic thresholding
+    binary_image = defect_mask_crop > threshold_value
+    labeled_image = measure.label(binary_image, connectivity=2)
     stats = measure.regionprops(labeled_image)
-
-    # d1 = np.isin(labeled_image, [i + 1 for i, stat in enumerate(stats) if stat.area >= defect_area_th])
-
-    # labeled_image = measure.label(d1, connectivity=2)
-    # stats = measure.regionprops(labeled_image)
 
     labeled_image_color = color.label2rgb(labeled_image, bg_label=0, kind='overlay')
     labeled_image_color = (labeled_image_color * 255).astype(np.uint8)
-    
-    cv2_image = cv2.cvtColor(image_real_np, cv2.COLOR_RGB2BGR)
+
+    cv2_image = cv2.cvtColor(np.array(image_real), cv2.COLOR_RGB2BGR)
     has_detect = False
-    
+    kernel = np.ones((3, 3), np.uint8)
+
     for region in stats:  
         if region.area >= defect_area_th:
             has_detect = True
-            min_row, min_col, max_row, max_col = region.bbox
-            cv2.rectangle(cv2_image, (min_col, min_row), (max_col, max_row), defect_color, 1)
+            mask = np.uint8(labeled_image == region.label)  # labels should be a 2D array with labels for each pixel
+
+            dilated_image = cv2.dilate(mask, kernel, iterations=1)
+            contours, _ = cv2.findContours(dilated_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            cv2.drawContours(cv2_image, contours, -1, defect_color, 1)
         
     name = lp_value
     
