@@ -6,18 +6,27 @@ plugin_path = os.path.dirname(__file__)
 if plugin_path not in sys.path:
     sys.path.append(plugin_path)
 
+    
+import functools
+import math
+import os
+import sys
+import time
+from pathlib import Path
+
+import bpy
+from bpy.types import Context
+import mathutils
+
+import bpy
 
 from GCodeParser import GCodeParser
-import functools
-import bpy
-import functools
-
 
 bl_info = {
     "name": "GCode Parser",
     "description": "Simulate 3D Printer",
     "author": "Saleh Ebrahimian",
-    "version": (1, 1, 1),
+    "version": (1, 1, 4),
     "blender": (4, 2, 1),
     "location": "GCode > GCode PA",
     "warning": "",

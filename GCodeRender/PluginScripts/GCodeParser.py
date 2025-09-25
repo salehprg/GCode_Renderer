@@ -81,6 +81,7 @@ class GCodeParser:
         self.collections = []
         self.layer_number = 0
         self.last_e = 0
+        self.is_absolute_mode = False
 
         self.set_elip_bevel(layer_height, layer_width)
 
@@ -422,18 +423,27 @@ class GCodeParser:
             return 0
         
         for idx,line in enumerate(self.lines[line_num:]):
+            is_g91 = line.startswith('G91')
+            is_g90 = line.startswith('G90')
+            is_g3 = line.startswith('G3')
             is_g0 = line.startswith('G0')
             is_g1 = line.startswith('G1')
             is_g92 = line.startswith('G92')
             is_M118 = line.startswith('M118')
             is_G4P50 = line.startswith('G4 P50')
+            is_M204 = line.startswith('M204')
             # is_comment = line.startswith(';') or len(line.replace(" ","")) == 0
             next_line = idx + line_num + 1
 
-            if is_g0 or is_g1 or is_g92 or is_M118 or is_G4P50:
+            if is_g90:
+                self.is_absolute_mode = True
+            if is_g91:
+                self.is_absolute_mode = False
+
+            if is_g3 or is_g0 or is_g1 or is_g92 or is_M118 or is_G4P50 or is_M204:
                 x = y = z = e = None
 
-                if is_g92 or is_g0 or is_g1:
+                if is_g92 or is_g0 or is_g1 or is_g3:
                     params = line.split()
                     for param in params:
                         if param.startswith('X'):
@@ -445,7 +455,7 @@ class GCodeParser:
                         if param.startswith('E'):
                             e = float(param[1:])
 
-                        if param == ';':
+                        if param == ';' or param.startswith(";"):
                             break
                         
                 # if is_G4P50 and render:
@@ -476,7 +486,7 @@ class GCodeParser:
                         self.render_image(filename)
                     return next_line
                     
-                if is_g1 or is_g0:       
+                if is_g1 or is_g0 or is_g3:       
 
                     if x is not None:
                         new_head_pos.x = x
@@ -487,19 +497,21 @@ class GCodeParser:
                     if z is not None:
                         new_head_pos.z = z
 
-                    if e is not None and e - self.last_e > 0:
-                        self.last_e = e
-                        new_pos_tup = (new_head_pos.x, new_head_pos.y, new_head_pos.z)
-                        head_pos_tup = (self.head_pos.x, self.head_pos.y, self.head_pos.z)
+                    if e is not None:
+                        if (self.is_absolute_mode and e > 0) or (not self.is_absolute_mode and e - self.last_e > 0):
+                            self.last_e = e
+                            new_pos_tup = (new_head_pos.x, new_head_pos.y, new_head_pos.z)
+                            head_pos_tup = (self.head_pos.x, self.head_pos.y, self.head_pos.z)
+                                
+                            if len(self.current_layer) == 0:
+                                self.current_layer.append(head_pos_tup)
+                                self.current_layer.append(new_pos_tup)
+                            else:
+                                self.current_layer.append(new_pos_tup)
                             
-                        if len(self.current_layer) == 0:
-                            self.current_layer.append(head_pos_tup)
-                            self.current_layer.append(new_pos_tup)
-                        else:
-                            self.current_layer.append(new_pos_tup)
-                            
-                    elif e is not None and e - self.last_e < 0:
-                        self.close_current_loop()
+                        elif (self.is_absolute_mode and e < 0) or (not self.is_absolute_mode and e - self.last_e < 0):
+                            self.close_current_loop()
+                            return next_line
 
                     if e is None:
                         self.close_current_loop()
