@@ -42,15 +42,16 @@ class DefectDetection:
         image_concatenated2 = self.model.tensor_to_image(concatenated_output_ideal)
 
         diff = (concatenated_output_ideal - concatenated_output_real)
-        diff[diff < 0] = 0
+        # diff[diff < 0] = 0
         distance = torch.sqrt(torch.sum(diff ** 2, dim=1))
 
         # Convert distance array into numpy array
         distance_np = distance[0].detach().cpu().numpy()  # Remove batch dimension and convert to NumPy
-        distance_np_image = (distance_np - distance_np.min()) / (distance_np.max() - distance_np.min()) * 255
-        distance_np_image = distance_np_image.astype(np.uint8)
+        distance_np = distance_np - distance_np.min()
 
-        defect_mask = zoom(distance_np, (image_real.height / distance_np.shape[0], 
+        distance_np_image = ((distance_np / distance_np.max()) * 255).astype(np.uint8)
+
+        defect_mask = zoom(distance_np_image, (image_real.height / distance_np.shape[0], 
                                      image_real.width / distance_np.shape[1]), order=1)
         
         return defect_mask, distance_np_image
